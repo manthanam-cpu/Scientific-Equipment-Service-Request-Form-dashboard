@@ -44,7 +44,7 @@ def load_data():
             except: return "-"
         df['เบอร์โทรศัพท์เพื่อติดต่อ'] = df['เบอร์โทรศัพท์เพื่อติดต่อ'].apply(mask_phone)
 
-    # ปกปิด Email (ค้นหาชื่อคอลัมน์ที่มีคำว่า email)
+    # ปกปิด Email
     email_cols = [c for c in df.columns if 'email' in c.lower() or 'อีเมล' in c]
     if email_cols:
         def mask_email(email):
@@ -63,20 +63,27 @@ if df.empty:
     st.warning("⏳ กำลังรอข้อมูลจาก Google Sheets...")
     st.stop()
 
-# --- ส่วนแสดงผล Dashboard ---
-st.title("🧪 ระบบรายงานสถิติการขอใช้เครื่องมือวิทยาศาสตร์")
-st.markdown(f"📊 ข้อมูลล่าสุด ณ วันที่ {pd.Timestamp.now().strftime('%d/%m/%Y %H:%M')}")
-
-# --- 🔍 ค้นหาชื่อคอลัมน์อัตโนมัติ (ป้องกัน Error หน้าขาว) ---
+# --- 🔍 ค้นหาชื่อคอลัมน์อัตโนมัติ ---
 status_col = 'สถานะ' if 'สถานะ' in df.columns else None
 return_col = 'การคืน' if 'การคืน' in df.columns else None
 
-# ค้นหาคอลัมน์ที่มีคำว่า 'ประเภท' หรือ 'คณะ'
 type_cols = [c for c in df.columns if 'ประเภท' in c]
 user_type_col = type_cols[0] if type_cols else None
 
 dept_cols = [c for c in df.columns if 'คณะ' in c or 'หน่วยงาน' in c]
 dept_col = dept_cols[0] if dept_cols else None
+
+# --- 🧹 จัดการปัญหาค่าว่าง (Null) ก่อนนำไปแสดงผล ---
+# เปลี่ยนช่องว่างให้เป็นคำว่า "ไม่ระบุ" เพื่อไม่ให้กราฟขึ้นคำว่า null
+if user_type_col: df[user_type_col] = df[user_type_col].fillna('ไม่ระบุ')
+if dept_col: df[dept_col] = df[dept_col].fillna('ไม่ระบุ')
+if status_col: df[status_col] = df[status_col].fillna('ยังไม่ระบุสถานะ')
+if return_col: df[return_col] = df[return_col].fillna('ยังไม่ระบุข้อมูล')
+
+
+# --- ส่วนแสดงผล Dashboard ---
+st.title("🧪 ระบบรายงานสถิติการขอใช้เครื่องมือวิทยาศาสตร์")
+st.markdown(f"📊 ข้อมูลล่าสุด ณ วันที่ {pd.Timestamp.now().strftime('%d/%m/%Y %H:%M')}")
 
 # 1. แถวสถิติสรุป
 m1, m2, m3, m4 = st.columns(4)
@@ -111,27 +118,23 @@ with c1:
         fig_user = px.pie(df, names=user_type_col, title='สัดส่วนประเภทผู้ใช้งาน', hole=0.4,
                          color_discrete_sequence=px.colors.qualitative.Safe)
         st.plotly_chart(fig_user, use_container_width=True)
-    else:
-        st.info("💡 ไม่พบคอลัมน์ประเภทผู้ใช้งานใน Google Sheets")
 
 with c2:
     if dept_col:
         fig_dept = px.pie(df, names=dept_col, title='สัดส่วนตามคณะ/หน่วยงาน', hole=0.4,
                          color_discrete_sequence=px.colors.qualitative.Pastel)
         st.plotly_chart(fig_dept, use_container_width=True)
-    else:
-         st.info("💡 ไม่พบคอลัมน์หน่วยงานใน Google Sheets")
 
 c3, c4 = st.columns(2)
 with c3:
     if status_col:
         fig_status = px.pie(df, names=status_col, title='สถานะการอนุมัติ', hole=0.4,
-                          color_discrete_sequence=['#FFCC00', '#2ecc71', '#e74c3c'])
+                          color_discrete_sequence=['#FFCC00', '#2ecc71', '#e74c3c', '#95a5a6'])
         st.plotly_chart(fig_status, use_container_width=True)
 with c4:
     if return_col:
         fig_return = px.pie(df, names=return_col, title='สถานะการคืนอุปกรณ์', hole=0.4,
-                          color_discrete_sequence=['#3498db', '#95a5a6'])
+                          color_discrete_sequence=['#3498db', '#95a5a6', '#e67e22'])
         st.plotly_chart(fig_return, use_container_width=True)
 
 st.markdown("---")
@@ -139,10 +142,9 @@ st.markdown("---")
 # 3. ตารางรายละเอียดผู้ขอใช้บริการ
 st.subheader("📋 รายละเอียดผู้ขอใช้บริการล่าสุด (PDPA Masking)")
 
-# ตรวจสอบคอลัมน์อีเมลเพื่อนำมาแสดงผล
+email_cols = [c for c in df.columns if 'email' in c.lower() or 'อีเมล' in c]
 email_display = email_cols[0] if email_cols else 'Email Address'
 
-# กำหนดคอลัมน์ที่จะโชว์
 display_cols = [
     'Timestamp', 
     'ชื่อ-สกุล', 
@@ -155,7 +157,6 @@ display_cols = [
     return_col
 ]
 
-# กรองเอาเฉพาะคอลัมน์ที่มีอยู่จริง (ป้องกัน Error)
 valid_display = [c for c in display_cols if c and c in df.columns]
 
 st.dataframe(
