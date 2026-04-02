@@ -22,18 +22,17 @@ def load_data():
 
     # --- 🔒 ส่วนปกปิดข้อมูลส่วนบุคคล (PDPA Masking) ---
     
-    # ปกปิด ชื่อ-สกุล (เช่น ปัญญา ไ***)
+    # ปกปิด ชื่อ-สกุล
     if 'ชื่อ-สกุล' in df.columns:
         def mask_name(name):
             name = str(name).strip()
             if not name or name.lower() == 'nan': return "-"
             parts = name.split()
-            if len(parts) >= 2:
-                return f"{parts[0]} {parts[1][0]}***"
+            if len(parts) >= 2: return f"{parts[0]} {parts[1][0]}***"
             return name[0] + "***"
         df['ชื่อ-สกุล'] = df['ชื่อ-สกุล'].apply(mask_name)
 
-    # ปกปิดเบอร์โทรศัพท์ (081-XXX-5678)
+    # ปกปิดเบอร์โทรศัพท์
     if 'เบอร์โทรศัพท์เพื่อติดต่อ' in df.columns:
         def mask_phone(phone):
             try:
@@ -45,15 +44,16 @@ def load_data():
             except: return "-"
         df['เบอร์โทรศัพท์เพื่อติดต่อ'] = df['เบอร์โทรศัพท์เพื่อติดต่อ'].apply(mask_phone)
 
-    # ปกปิด Email (p***@g.swu.ac.th)
-    if 'Email Address' in df.columns:
+    # ปกปิด Email (ค้นหาชื่อคอลัมน์ที่มีคำว่า email)
+    email_cols = [c for c in df.columns if 'email' in c.lower() or 'อีเมล' in c]
+    if email_cols:
         def mask_email(email):
             email = str(email)
             if '@' in email:
                 parts = email.split('@')
                 return f"{parts[0][0]}***@{parts[1]}"
             return "-"
-        df['Email Address'] = df['Email Address'].apply(mask_email)
+        df[email_cols[0]] = df[email_cols[0]].apply(mask_email)
 
     return df
 
@@ -67,7 +67,99 @@ if df.empty:
 st.title("🧪 ระบบรายงานสถิติการขอใช้เครื่องมือวิทยาศาสตร์")
 st.markdown(f"📊 ข้อมูลล่าสุด ณ วันที่ {pd.Timestamp.now().strftime('%d/%m/%Y %H:%M')}")
 
-# 1. แถวสถิติสรุป (Top Metrics)
+# --- 🔍 ค้นหาชื่อคอลัมน์อัตโนมัติ (ป้องกัน Error หน้าขาว) ---
+status_col = 'สถานะ' if 'สถานะ' in df.columns else None
+return_col = 'การคืน' if 'การคืน' in df.columns else None
+
+# ค้นหาคอลัมน์ที่มีคำว่า 'ประเภท' หรือ 'คณะ'
+type_cols = [c for c in df.columns if 'ประเภท' in c]
+user_type_col = type_cols[0] if type_cols else None
+
+dept_cols = [c for c in df.columns if 'คณะ' in c or 'หน่วยงาน' in c]
+dept_col = dept_cols[0] if dept_cols else None
+
+# 1. แถวสถิติสรุป
 m1, m2, m3, m4 = st.columns(4)
 with m1:
     st.metric("📝 คำขอทั้งหมด", f"{len(df)} รายการ")
+with m2:
+    if status_col:
+        pending = len(df[df[status_col] != 'อนุมัติแล้ว'])
+        st.metric("⏳ รออนุมัติ", f"{pending} รายการ")
+    else:
+        st.metric("⏳ รออนุมัติ", "ไม่พบข้อมูล")
+with m3:
+    if return_col:
+        returned = len(df[df[return_col] == 'คืนเรียบร้อย'])
+        st.metric("✅ คืนของแล้ว", f"{returned} รายการ")
+    else:
+        st.metric("✅ คืนของแล้ว", "ไม่พบข้อมูล")
+with m4:
+    if user_type_col:
+        st.metric("👥 กลุ่มผู้ใช้", f"{df[user_type_col].nunique()} ประเภท")
+    else:
+        st.metric("👥 กลุ่มผู้ใช้", "ไม่พบข้อมูล")
+
+st.markdown("---")
+
+# 2. ส่วนกราฟสัดส่วน
+st.subheader("🎯 สรุปสัดส่วนข้อมูลสำคัญ")
+c1, c2 = st.columns(2)
+
+with c1:
+    if user_type_col:
+        fig_user = px.pie(df, names=user_type_col, title='สัดส่วนประเภทผู้ใช้งาน', hole=0.4,
+                         color_discrete_sequence=px.colors.qualitative.Safe)
+        st.plotly_chart(fig_user, use_container_width=True)
+    else:
+        st.info("💡 ไม่พบคอลัมน์ประเภทผู้ใช้งานใน Google Sheets")
+
+with c2:
+    if dept_col:
+        fig_dept = px.pie(df, names=dept_col, title='สัดส่วนตามคณะ/หน่วยงาน', hole=0.4,
+                         color_discrete_sequence=px.colors.qualitative.Pastel)
+        st.plotly_chart(fig_dept, use_container_width=True)
+    else:
+         st.info("💡 ไม่พบคอลัมน์หน่วยงานใน Google Sheets")
+
+c3, c4 = st.columns(2)
+with c3:
+    if status_col:
+        fig_status = px.pie(df, names=status_col, title='สถานะการอนุมัติ', hole=0.4,
+                          color_discrete_sequence=['#FFCC00', '#2ecc71', '#e74c3c'])
+        st.plotly_chart(fig_status, use_container_width=True)
+with c4:
+    if return_col:
+        fig_return = px.pie(df, names=return_col, title='สถานะการคืนอุปกรณ์', hole=0.4,
+                          color_discrete_sequence=['#3498db', '#95a5a6'])
+        st.plotly_chart(fig_return, use_container_width=True)
+
+st.markdown("---")
+
+# 3. ตารางรายละเอียดผู้ขอใช้บริการ
+st.subheader("📋 รายละเอียดผู้ขอใช้บริการล่าสุด (PDPA Masking)")
+
+# ตรวจสอบคอลัมน์อีเมลเพื่อนำมาแสดงผล
+email_display = email_cols[0] if email_cols else 'Email Address'
+
+# กำหนดคอลัมน์ที่จะโชว์
+display_cols = [
+    'Timestamp', 
+    'ชื่อ-สกุล', 
+    user_type_col, 
+    dept_col, 
+    'เรื่อง', 
+    'เบอร์โทรศัพท์เพื่อติดต่อ', 
+    email_display,
+    status_col, 
+    return_col
+]
+
+# กรองเอาเฉพาะคอลัมน์ที่มีอยู่จริง (ป้องกัน Error)
+valid_display = [c for c in display_cols if c and c in df.columns]
+
+st.dataframe(
+    df[valid_display].sort_values(by='Timestamp', ascending=False), 
+    use_container_width=True,
+    hide_index=True
+)
