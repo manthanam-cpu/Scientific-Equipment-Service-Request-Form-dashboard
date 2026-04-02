@@ -164,3 +164,10 @@ st.dataframe(
     use_container_width=True,
     hide_index=True
 )
+# --- ตัวอย่างการเพิ่มส่วนใหม่ ---
+st.markdown("---") # เส้นคั่น
+st.subheader("📈 แนวโน้มการใช้งานรายเดือน")
+
+# โค้ดสำหรับสร้างกราฟแท่งหรือกราฟเส้น
+# fig_new = px.bar(df, x='...', y='...')
+# st.plotly_chart(fig_new, use_container_width=True)
