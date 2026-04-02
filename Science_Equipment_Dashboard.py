@@ -22,24 +22,32 @@ def load_data():
 
     # --- 🔒 ส่วนปกปิดข้อมูลส่วนบุคคล (PDPA Masking) ---
     
-    # 1. ปกปิด ชื่อ-สกุล (เช่น สมชาย เข็มกลัด -> สมชาย ข***)
+    # 1. ปกปิด ชื่อ-สกุล
     if 'ชื่อ-สกุล' in df.columns:
         def mask_name(name):
             name = str(name).strip()
             if not name or name.lower() == 'nan': return "-"
             parts = name.split()
             if len(parts) >= 2:
-                return f"{parts[0]} {parts[1][0]}***" # แสดงชื่อจริง และตัวแรกของนามสกุล
+                return f"{parts[0]} {parts[1][0]}***"
             return name[0] + "***"
         df['ชื่อ-สกุล'] = df['ชื่อ-สกุล'].apply(mask_name)
 
-    # 2. ปกปิดเบอร์โทรศัพท์ (081-XXX-5678)
+    # 2. ปกปิดเบอร์โทรศัพท์ (อัปเดตใหม่เพื่อแก้ TypeError)
     if 'เบอร์โทรศัพท์เพื่อติดต่อ' in df.columns:
-        df['เบอร์โทรศัพท์เพื่อติดต่อ'] = df['เบอร์โทรศัพท์เพื่อติดต่อ'].astype(str).apply(
-            lambda x: x[:3] + "-XXX-" + x[-4:] if len(x) >= 9 else "-"
-        )
+        def mask_phone(phone):
+            try:
+                p = str(phone).strip()
+                if p.lower() == 'nan' or not p: return "-"
+                if p.endswith('.0'): p = p[:-2] # ลบ .0 ออกกรณีระบบมองเป็นทศนิยม
+                if len(p) >= 9:
+                    return f"{p[:3]}-XXX-{p[-4:]}"
+                return "-"
+            except:
+                return "-"
+        df['เบอร์โทรศัพท์เพื่อติดต่อ'] = df['เบอร์โทรศัพท์เพื่อติดต่อ'].apply(mask_phone)
 
-    # 3. ปกปิด Email (p***@g.swu.ac.th)
+    # 3. ปกปิด Email
     if 'Email Address' in df.columns:
         def mask_email(email):
             email = str(email)
@@ -94,11 +102,9 @@ with c_chart2:
 
 st.markdown("---")
 
-# 3. ตารางข้อมูล (แสดงคอลัมน์ใหม่ 'สถานะ' และ 'การคืน' ด้วย)
+# 3. ตารางข้อมูล
 st.subheader("📋 รายการข้อมูลล่าสุด")
-# เลือกคอลัมน์ที่ต้องการโชว์ในตาราง (เพิ่ม สถานะ และ การคืน เข้าไปแล้ว)
 display_cols = ['Timestamp', 'ชื่อ-สกุล', 'คณะ/หน่วยงาน', 'เรื่อง', 'สถานะ', 'การคืน']
-# ตรวจสอบว่าคอลัมน์มีจริงในไฟล์ไหมก่อนแสดง
 valid_cols = [c for c in display_cols if c in df.columns]
 
 st.dataframe(df[valid_cols], use_container_width=True)
