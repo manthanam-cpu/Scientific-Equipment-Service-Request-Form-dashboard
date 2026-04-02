@@ -169,7 +169,7 @@ with c2:
 
 st.subheader("📋 ตารางข้อมูลรวม (Data Table)")
 if not filtered_df.empty:
-    display_cols = ['Timestamp', 'ชื่อ-สกุล', type_col, 'คณะ/หน่วยงาน', 'เรื่อง']
+    display_cols = ['Timestamp', 'ชื่อ-สกุล', 'คณะ/หน่วยงาน', 'เรื่อง', 'สถานะ', 'การคืน']
     valid_cols = [c for c in display_cols if c and c in filtered_df.columns]
     
     st.dataframe(filtered_df[valid_cols], use_container_width=True, height=400)
