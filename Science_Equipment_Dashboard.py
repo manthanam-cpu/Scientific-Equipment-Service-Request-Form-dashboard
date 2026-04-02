@@ -11,7 +11,7 @@ st.set_page_config(
 )
 
 # ลิงก์ Google Sheets ของคุณที่แปลงสำหรับดึงข้อมูลเป็น CSV แล้ว
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1wzOqWDzLNisU7sKj3PAJxHUD-dHO-PL1wv1r9kfCmv8/export?format=csv"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1wzOqWDzLNiaU7sKj3PAJxHJD-dH0-PL1wv1r9kfCmv8/export?format=csv"
 
 # --- ส่วนโหลดและเตรียมข้อมูลแบบ Real-time ---
 @st.cache_data(ttl=60) # ดึงข้อมูลใหม่ทุกๆ 60 วินาที
