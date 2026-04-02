@@ -10,24 +10,25 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 🔴 ตรงนี้สำคัญมาก: นำลิงก์ Google Sheets ของคุณมาใส่แทนที่ (อย่าลืมเปลี่ยน /edit?usp=sharing เป็น /export?format=csv)
-SHEET_URL = "https://docs.google.com/spreadsheets/d/ใส่_ID_ชีตของคุณตรงนี้/export?format=csv"
+# ลิงก์ Google Sheets ของคุณที่แปลงสำหรับดึงข้อมูลเป็น CSV แล้ว
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1wzOqWDzLNisU7sKj3PAJxHUD-dHO-PL1wv1r9kfCmv8/export?format=csv"
 
 # --- ส่วนโหลดและเตรียมข้อมูลแบบ Real-time ---
-@st.cache_data(ttl=60) # ttl=60 คือการสั่งให้รีเฟรชข้อมูลใหม่ทุกๆ 60 วินาที
+@st.cache_data(ttl=60) # ดึงข้อมูลใหม่ทุกๆ 60 วินาที
 def load_data():
     try:
         # อ่านไฟล์ CSV จาก Google Sheets โดยตรง
         df = pd.read_csv(SHEET_URL)
     except Exception as e:
-        st.error(f"ไม่สามารถเชื่อมต่อ Google Sheets ได้ กรุณาตรวจสอบลิงก์: {e}")
+        st.error(f"ไม่สามารถเชื่อมต่อ Google Sheets ได้: {e}")
+        st.info("💡 อย่าลืมตั้งค่าแชร์ Google Sheets เป็น 'ทุกคนที่มีลิงก์ (Anyone with the link)' และเป็น 'ผู้มีสิทธิ์อ่าน (Viewer)' นะครับ")
         return pd.DataFrame()
 
-    # ลบแถวที่ไม่มีชื่อ-สกุล (ข้อมูลขยะ)
+    # ลบแถวที่ไม่มีชื่อ-สกุล (เพื่อกรองแถวว่างทิ้ง)
     if 'ชื่อ-สกุล' in df.columns:
         df = df.dropna(subset=['ชื่อ-สกุล'])
     
-    # แปลงวันที่เป็น datetime object เพื่อให้พล็อตลงกราฟได้ถูกต้อง
+    # แปลงวันที่ให้กราฟอ่านได้
     if 'เริ่มขอใช้บริการ' in df.columns:
         df['เริ่มขอใช้บริการ'] = pd.to_datetime(df['เริ่มขอใช้บริการ'], errors='coerce')
     if 'สิ้นสุดการขอใช้บริการ' in df.columns:
@@ -37,7 +38,7 @@ def load_data():
 
 df = load_data()
 
-# ตกแต่ง CSS เพื่อความสวยงาม
+# ตกแต่ง CSS
 st.markdown("""
 <style>
     .metric-card {
@@ -53,7 +54,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ตรวจสอบว่ามีข้อมูลหรือไม่ก่อนแสดงผล
+# หยุดการทำงานถ้าไม่มีข้อมูล
 if df.empty:
     st.warning("⏳ รอการเชื่อมต่อข้อมูล หรือยังไม่มีข้อมูลในแบบฟอร์ม...")
     st.stop()
@@ -62,34 +63,39 @@ if df.empty:
 st.sidebar.image("https://img.icons8.com/clouds/200/experimental-test-tube-clouds.png", width=100)
 st.sidebar.title("🔬 ตัวกรองและรายละเอียด")
 
-# 1. ตัวกรองภาพรวม (Global Filters)
 st.sidebar.subheader("🔍 กรองข้อมูล Dashboard")
 
-# เช็คคอลัมน์ก่อนสร้างตัวกรองเพื่อป้องกัน Error
-if 'คณะ/หน่วยงาน' in df.columns and 'ประเภทผู้ขอใช้บริการเครื่องมือวิทยาศาสตร์' in df.columns:
+# กรองข้อมูล
+dept_col = 'คณะ/หน่วยงาน'
+type_col = 'ประเภทผู้ขอใช้บริการเครื่องมือวิทยาศาสตร์ ' # อาจจะมี space ตามหลังในบางฟอร์ม
+
+# หาชื่อคอลัมน์ประเภทผู้ใช้งานที่ถูกต้องจากข้อมูลจริง
+actual_type_col = [col for col in df.columns if 'ประเภทผู้ขอใช้บริการ' in col]
+type_col = actual_type_col[0] if actual_type_col else None
+
+if dept_col in df.columns and type_col:
     filter_dept = st.sidebar.multiselect(
         "เลือกคณะ/หน่วยงาน",
-        options=df['คณะ/หน่วยงาน'].dropna().unique(),
-        default=df['คณะ/หน่วยงาน'].dropna().unique()
+        options=df[dept_col].dropna().unique(),
+        default=df[dept_col].dropna().unique()
     )
 
     filter_type = st.sidebar.multiselect(
         "เลือกประเภทผู้ขอใช้",
-        options=df['ประเภทผู้ขอใช้บริการเครื่องมือวิทยาศาสตร์'].dropna().unique(),
-        default=df['ประเภทผู้ขอใช้บริการเครื่องมือวิทยาศาสตร์'].dropna().unique()
+        options=df[type_col].dropna().unique(),
+        default=df[type_col].dropna().unique()
     )
 
-    # กรองข้อมูลใน DataFrame
     filtered_df = df[
-        (df['คณะ/หน่วยงาน'].isin(filter_dept)) &
-        (df['ประเภทผู้ขอใช้บริการเครื่องมือวิทยาศาสตร์'].isin(filter_type))
+        (df[dept_col].isin(filter_dept)) &
+        (df[type_col].isin(filter_type))
     ]
 else:
     filtered_df = df.copy()
 
 st.sidebar.markdown("---")
 
-# 2. ส่วนแสดงรายละเอียดรายบุคคล (Detail View)
+# รายละเอียดผู้ใช้
 st.sidebar.subheader("📋 รายละเอียดผู้ขอใช้บริการ")
 st.sidebar.info("เลือกรายชื่อเพื่อดูข้อมูลในเมนูนี้")
 
@@ -103,19 +109,15 @@ if not filtered_df.empty and 'เรื่อง' in filtered_df.columns:
         selected_name = selected_person.split(" - ")[0]
         person_data = filtered_df[filtered_df['ชื่อ-สกุล'] == selected_name].iloc[0]
 
-        st.sidebar.markdown(f"**Email Address:** {person_data.get('Email Address', '-')}")
+        st.sidebar.markdown(f"**Email:** {person_data.get('Email Address', '-')}")
         st.sidebar.markdown(f"**ชื่อ-สกุล:** {person_data.get('คำนำหน้าชื่อ', '')} {person_data.get('ชื่อ-สกุล', '')}")
-        st.sidebar.markdown(f"**ประเภท:** {person_data.get('ประเภทผู้ขอใช้บริการเครื่องมือวิทยาศาสตร์', '-')}")
+        st.sidebar.markdown(f"**ประเภท:** {person_data.get(type_col, '-') if type_col else '-'}")
         st.sidebar.markdown(f"**เบอร์โทรศัพท์:** {person_data.get('เบอร์โทรศัพท์เพื่อติดต่อ', '-')}")
-        st.sidebar.markdown(f"**คณะ/หน่วยงาน:** {person_data.get('คณะ/หน่วยงาน', '-')}")
-        st.sidebar.markdown("---")
-        st.sidebar.markdown("**📅 ช่วงเวลาการใช้งาน**")
-        st.sidebar.markdown(f"**เริ่ม:** {person_data.get('เริ่มขอใช้บริการ', '-')}")
-        st.sidebar.markdown(f"**สิ้นสุด:** {person_data.get('สิ้นสุดการขอใช้บริการ', '-')}")
+        st.sidebar.markdown(f"**หน่วยงาน:** {person_data.get('คณะ/หน่วยงาน', '-')}")
 
 # --- Main Dashboard Area ---
 st.title("🧪 Dashboard สถิติการขอใช้เครื่องมือวิทยาศาสตร์")
-st.markdown("🟢 ระบบกำลังดึงข้อมูลแบบ Real-time จาก Google Sheets")
+st.markdown("🟢 ระบบเชื่อมต่อข้อมูล Real-time จาก Google Sheets แล้ว")
 
 # KPI Cards
 col1, col2, col3 = st.columns(3)
@@ -134,16 +136,14 @@ with col3:
 
 st.markdown("---")
 
-# Row 1: Graphs
+# กราฟ
 c1, c2 = st.columns([1, 1])
 
 with c1:
     st.subheader("📊 สัดส่วนประเภทผู้ขอใช้บริการ")
-    if not filtered_df.empty and 'ประเภทผู้ขอใช้บริการเครื่องมือวิทยาศาสตร์' in filtered_df.columns:
-        fig_pie = px.pie(filtered_df, names='ประเภทผู้ขอใช้บริการเครื่องมือวิทยาศาสตร์', 
-                         hole=0.4, 
-                         color_discrete_sequence=px.colors.sequential.RdBu,
-                         title="User Type Distribution")
+    if not filtered_df.empty and type_col:
+        fig_pie = px.pie(filtered_df, names=type_col, hole=0.4, 
+                         color_discrete_sequence=px.colors.sequential.RdBu)
         st.plotly_chart(fig_pie, use_container_width=True)
 
 with c2:
@@ -152,15 +152,13 @@ with c2:
         dept_counts = filtered_df['คณะ/หน่วยงาน'].value_counts().reset_index()
         dept_counts.columns = ['หน่วยงาน', 'จำนวนครั้ง']
         fig_bar = px.bar(dept_counts, x='หน่วยงาน', y='จำนวนครั้ง',
-                         color='จำนวนครั้ง',
-                         color_continuous_scale='Viridis',
-                         title="Usage by Department")
+                         color='จำนวนครั้ง', color_continuous_scale='Viridis')
         st.plotly_chart(fig_bar, use_container_width=True)
 
-# Row 2: Data Table
+# ตารางข้อมูล
 st.subheader("📋 ตารางข้อมูลรวม (Data Table)")
 if not filtered_df.empty:
-    display_cols = ['ชื่อ-สกุล', 'ประเภทผู้ขอใช้บริการเครื่องมือวิทยาศาสตร์', 'คณะ/หน่วยงาน', 'เริ่มขอใช้บริการ']
-    valid_cols = [c for c in display_cols if c in filtered_df.columns]
+    display_cols = ['Timestamp', 'ชื่อ-สกุล', type_col, 'คณะ/หน่วยงาน', 'เรื่อง']
+    valid_cols = [c for c in display_cols if c and c in filtered_df.columns]
     
     st.dataframe(filtered_df[valid_cols], use_container_width=True, height=400)
