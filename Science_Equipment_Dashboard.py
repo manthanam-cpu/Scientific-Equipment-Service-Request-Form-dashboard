@@ -10,7 +10,7 @@ st.set_page_config(
 )
 
 # ลิงก์ Google Sheets ของคุณ
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1wzOqWDzLNiaU7sKj3PAJxHJD-dH0-PL1wv1r9kfCmv8/export?format=csv"
+SHEET_URL = "https://docs.google.com/1wzOqWDzLNiaU7sKj3PAJxHJD-dH0-PL1wv1r9kfCmv8/export?format=csv"
 
 @st.cache_data(ttl=60)
 def load_data():
@@ -19,6 +19,10 @@ def load_data():
     except Exception as e:
         st.error(f"ไม่สามารถเชื่อมต่อข้อมูลได้: {e}")
         return pd.DataFrame()
+
+    # --- 🕒 แปลงคอลัมน์ Timestamp ให้เป็นข้อมูลวันที่และเวลาจริงๆ ---
+    if 'Timestamp' in df.columns:
+        df['Timestamp'] = pd.to_datetime(df['Timestamp'], errors='coerce')
 
     # --- 🔒 ส่วนปกปิดข้อมูลส่วนบุคคล (PDPA Masking) ---
     
@@ -74,7 +78,6 @@ dept_cols = [c for c in df.columns if 'คณะ' in c or 'หน่วยงา
 dept_col = dept_cols[0] if dept_cols else None
 
 # --- 🧹 จัดการปัญหาค่าว่าง (Null) ก่อนนำไปแสดงผล ---
-# เปลี่ยนช่องว่างให้เป็นคำว่า "ไม่ระบุ" เพื่อไม่ให้กราฟขึ้นคำว่า null
 if user_type_col: df[user_type_col] = df[user_type_col].fillna('ไม่ระบุ')
 if dept_col: df[dept_col] = df[dept_col].fillna('ไม่ระบุ')
 if status_col: df[status_col] = df[status_col].fillna('ยังไม่ระบุสถานะ')
@@ -140,10 +143,11 @@ with c4:
 st.markdown("---")
 
 # 3. ตารางรายละเอียดผู้ขอใช้บริการ
-st.subheader("📋 รายละเอียดผู้ขอใช้บริการล่าสุด (PDPA Masking)")
+st.subheader("📋 รายละเอียดผู้ขอใช้บริการ (เรียงลำดับก่อน-หลัง)")
 
-email_cols = [c for c in df.columns if 'email' in c.lower() or 'อีเมล' in c]
-email_display = email_cols[0] if email_cols else 'Email Address'
+# ประกาศหาตัวแปร email_cols อีกครั้ง เพื่อให้พร้อมใช้งานสำหรับตารางด้านล่าง
+email_cols_for_display = [c for c in df.columns if 'email' in c.lower() or 'อีเมล' in c]
+email_display = email_cols_for_display[0] if email_cols_for_display else 'Email Address'
 
 display_cols = [
     'Timestamp', 
@@ -159,15 +163,17 @@ display_cols = [
 
 valid_display = [c for c in display_cols if c and c in df.columns]
 
+# เตรียมข้อมูลเพื่อนำมาแสดงผล
+df_display = df[valid_display].copy()
+
+# สั่งเรียงลำดับตาม Timestamp โดยให้คนที่มาก่อน (ข้อมูลเก่ากว่า) อยู่บนสุด (ascending=True)
+if 'Timestamp' in df_display.columns:
+    df_display = df_display.sort_values(by='Timestamp', ascending=True)
+    # จัดรูปแบบวันที่ให้ดูสวยงามอ่านง่ายขึ้นก่อนแสดงผล
+    df_display['Timestamp'] = df_display['Timestamp'].dt.strftime('%d/%m/%Y %H:%M')
+
 st.dataframe(
-    df[valid_display].sort_values(by='Timestamp', ascending=False), 
+    df_display, 
     use_container_width=True,
     hide_index=True
 )
-# --- ตัวอย่างการเพิ่มส่วนใหม่ ---
-st.markdown("---") # เส้นคั่น
-st.subheader("📈 แนวโน้มการใช้งานรายเดือน")
-
-# โค้ดสำหรับสร้างกราฟแท่งหรือกราฟเส้น
-# fig_new = px.bar(df, x='...', y='...')
-# st.plotly_chart(fig_new, use_container_width=True)
