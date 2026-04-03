@@ -10,7 +10,7 @@ st.set_page_config(
 )
 
 # ลิงก์ Google Sheets ของคุณ
-SHEET_URL = "https://docs.google.com/1wzOqWDzLNiaU7sKj3PAJxHJD-dH0-PL1wv1r9kfCmv8/export?format=csv"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1wzOqWDzLNiaU7sKj3PAJxHJD-dH0-PL1wv1r9kfCmv8/export?format=csv&gid=1562070767"
 
 @st.cache_data(ttl=60)
 def load_data():
