@@ -49,7 +49,7 @@ SHEET_URL = (
 def find_col(columns: list, keywords: list):
     """
     คืน str ชื่อคอลัมน์แรกที่มี keyword ใดๆ อยู่ภายใน
-    คืน None ถ้าไม่พบ — ไม่คืน list เด็ดขาด
+    คืน None ถ้าไม่พบ
     """
     for col in columns:
         for kw in keywords:
@@ -81,6 +81,26 @@ def parse_date_range(raw):
             return s, e
     except Exception:
         return None, None
+
+
+def count_status(series: pd.Series, keywords: list,
+                 exclude: list = None) -> int:
+    """
+    นับจำนวนแถวที่ค่าใน Series มี keyword ใดๆ
+    และไม่มี keyword ใดๆ ใน exclude
+    ใช้สำหรับจับคู่ค่าสถานะที่อาจพิมพ์ต่างกัน
+    """
+    if series is None or len(series) == 0:
+        return 0
+    mask = series.str.contains(
+        "|".join(keywords), na=False, case=False
+    )
+    if exclude:
+        ex_mask = series.str.contains(
+            "|".join(exclude), na=False, case=False
+        )
+        mask = mask & ~ex_mask
+    return int(mask.sum())
 
 
 # ============================================================
@@ -124,7 +144,7 @@ def load_data():
             return f"{v[:3]}-XXX-{v[-4:]}" if len(v) >= 9 else "-"
         df[phone_col_local] = df[phone_col_local].apply(mask_phone)
 
-    # PDPA: Mask Email — วนทีละคอลัมน์เท่านั้น
+    # PDPA: Mask Email — วนทีละคอลัมน์
     def mask_email(v):
         v = str(v).strip()
         if not v or v.lower() == "nan":
@@ -167,17 +187,17 @@ all_cols = list(df.columns)
 # ============================================================
 # ตรวจหาคอลัมน์ทั้งหมด — str | None เสมอ
 # ============================================================
-STATUS_COL    = find_col(all_cols, ["สถานะ"])
-RETURN_COL    = find_col(all_cols, ["การคืน"])
-USERTYPE_COL  = find_col(all_cols, ["ประเภทผู้ใช้", "ประเภท"])
-DEPT_COL      = find_col(all_cols, ["คณะ", "หน่วยงาน"])
-TOOL_COL      = find_col(all_cols, ["เครื่องมือ", "อุปกรณ์"])
-LOCATION_COL  = find_col(all_cols, ["โรงเรือน", "สถานที่", "ห้อง"])
-PURPOSE_COL   = find_col(all_cols, ["วัตถุประสงค์", "จุดประสงค์", "เรื่อง"])
-NAME_COL      = find_col(all_cols, ["ชื่อ-สกุล", "ชื่อ"])
-PHONE_COL     = find_col(all_cols, ["เบอร์", "โทร"])
-EMAIL_COL     = find_col(all_cols, ["Email Address", "E-mail",
-                                     "email", "อีเมล"])
+STATUS_COL     = find_col(all_cols, ["สถานะ"])
+RETURN_COL     = find_col(all_cols, ["การคืน"])
+USERTYPE_COL   = find_col(all_cols, ["ประเภทผู้ใช้", "ประเภท"])
+DEPT_COL       = find_col(all_cols, ["คณะ", "หน่วยงาน"])
+TOOL_COL       = find_col(all_cols, ["เครื่องมือ", "อุปกรณ์"])
+LOCATION_COL   = find_col(all_cols, ["โรงเรือน", "สถานที่", "ห้อง"])
+PURPOSE_COL    = find_col(all_cols, ["วัตถุประสงค์", "จุดประสงค์", "เรื่อง"])
+NAME_COL       = find_col(all_cols, ["ชื่อ-สกุล", "ชื่อ"])
+PHONE_COL      = find_col(all_cols, ["เบอร์", "โทร"])
+EMAIL_COL      = find_col(all_cols, ["Email Address", "E-mail",
+                                      "email", "อีเมล"])
 DATE_START_COL = None
 DATE_END_COL   = None
 
@@ -210,7 +230,7 @@ if RETURN_COL:
 # ============================================================
 # DEBUG EXPANDER
 # ============================================================
-with st.expander("🔍 Debug: คอลัมน์ที่ตรวจพบ (คลิกเพื่อดู/ซ่อน)"):
+with st.expander("🔍 Debug: คอลัมน์และค่าที่ตรวจพบ (คลิกเพื่อดู)"):
     st.json({
         "STATUS_COL":     STATUS_COL,
         "RETURN_COL":     RETURN_COL,
@@ -227,6 +247,21 @@ with st.expander("🔍 Debug: คอลัมน์ที่ตรวจพบ (
         "ALL_COLUMNS":    all_cols,
     })
 
+    # ✅ แสดงค่าจริงในคอลัมน์สถานะ — สำคัญมากสำหรับ debug KPI
+    d1, d2 = st.columns(2)
+    with d1:
+        if STATUS_COL:
+            st.markdown(f"**ค่าจริงใน `{STATUS_COL}`:**")
+            sc = df[STATUS_COL].value_counts().reset_index()
+            sc.columns = ["ค่า", "จำนวน"]
+            st.dataframe(sc, use_container_width=True, hide_index=True)
+    with d2:
+        if RETURN_COL:
+            st.markdown(f"**ค่าจริงใน `{RETURN_COL}`:**")
+            rc = df[RETURN_COL].value_counts().reset_index()
+            rc.columns = ["ค่า", "จำนวน"]
+            st.dataframe(rc, use_container_width=True, hide_index=True)
+
 # ============================================================
 # SIDEBAR — FILTERS
 # ============================================================
@@ -234,7 +269,6 @@ with st.sidebar:
     st.title("🔽 ตัวกรองข้อมูล")
     st.markdown("เลือกเงื่อนไขเพื่อกรองข้อมูล")
 
-    # ประเภทผู้ใช้
     sel_type = "ทั้งหมด"
     if USERTYPE_COL:
         opts = ["ทั้งหมด"] + sorted(
@@ -242,7 +276,6 @@ with st.sidebar:
         )
         sel_type = st.selectbox("👤 ประเภทผู้ใช้", opts)
 
-    # คณะ/หน่วยงาน
     sel_dept = "ทั้งหมด"
     if DEPT_COL:
         opts = ["ทั้งหมด"] + sorted(
@@ -250,7 +283,6 @@ with st.sidebar:
         )
         sel_dept = st.selectbox("🏫 คณะ/หน่วยงาน", opts)
 
-    # สถานะอนุมัติ
     sel_status = "ทั้งหมด"
     if STATUS_COL:
         opts = ["ทั้งหมด"] + sorted(
@@ -258,7 +290,6 @@ with st.sidebar:
         )
         sel_status = st.selectbox("📋 สถานะอนุมัติ", opts)
 
-    # สถานะคืน
     sel_return = "ทั้งหมด"
     if RETURN_COL:
         opts = ["ทั้งหมด"] + sorted(
@@ -266,7 +297,6 @@ with st.sidebar:
         )
         sel_return = st.selectbox("📦 สถานะคืน", opts)
 
-    # ช่วงวันที่
     st.markdown("---")
     st.markdown("📅 **ช่วงเวลา**")
 
@@ -278,7 +308,6 @@ with st.sidebar:
         if not valid_ts.empty:
             mn = valid_ts.min().date()
             mx = valid_ts.max().date()
-
             raw = st.date_input(
                 "เลือกช่วงวันที่",
                 value=(mn, mx),
@@ -286,7 +315,6 @@ with st.sidebar:
                 max_value=mx,
                 key="date_range_input"
             )
-            # ✅ parse_date_range จัดการทุกกรณี
             date_start_filter, date_end_filter = parse_date_range(raw)
 
     st.markdown("---")
@@ -345,31 +373,49 @@ st.markdown("""
 # ============================================================
 st.subheader("📊 KPI Scorecard")
 
+# เดือนนี้
 this_m = 0
 if "Timestamp" in dff.columns:
     this_m = int(
         (dff["Timestamp"].dt.to_period("M") == THIS_MONTH).sum()
     )
 
-pending = 0
+# ✅ รออนุมัติ — นับแถวที่ยังไม่ได้รับการอนุมัติ
+pending  = 0
+approved = 0
 if STATUS_COL:
-    pending = total - int(
-        (dff[STATUS_COL] == "อนุมัติแล้ว").sum()
+    # นับที่มีคำว่า "อนุมัติ" แต่ไม่ใช่ "ไม่อนุมัติ" หรือ "รออนุมัติ"
+    approved = count_status(
+        dff[STATUS_COL],
+        keywords=["อนุมัติ"],
+        exclude=["ไม่อนุมัติ", "รออนุมัติ", "ยังไม่"]
     )
+    pending = total - approved
 
+# ✅ คืนแล้ว — นับแถวที่มีคำว่า "คืน" ในสถานะการคืน
 returned = 0
 if RETURN_COL:
-    returned = int((dff[RETURN_COL] == "คืนเรียบร้อย").sum())
+    returned = count_status(
+        dff[RETURN_COL],
+        keywords=["คืน"],
+        exclude=["ยังไม่", "ไม่ได้คืน"]
+    )
 
+# ✅ เกินกำหนด
 overdue = 0
 if DATE_END_COL and RETURN_COL:
+    not_returned_mask = ~dff[RETURN_COL].str.contains(
+        "คืน", na=False, case=False
+    ) | dff[RETURN_COL].str.contains(
+        "ยังไม่|ไม่ได้", na=False, case=False
+    )
     overdue = int(
-        ((dff[DATE_END_COL] < NOW) &
-         (dff[RETURN_COL]  != "คืนเรียบร้อย")).sum()
+        ((dff[DATE_END_COL] < NOW) & not_returned_mask).sum()
     )
 
 u_types = dff[USERTYPE_COL].nunique() if USERTYPE_COL else 0
 
+# แสดง KPI Cards
 k1, k2, k3, k4, k5, k6 = st.columns(6)
 kpi_data = [
     (k1, total,    "📝 คำขอทั้งหมด",  "#667eea", "#764ba2"),
@@ -387,6 +433,22 @@ for col_obj, val, label, g1, g2 in kpi_data:
             f"<h2>{val}</h2><p>{label}</p></div>",
             unsafe_allow_html=True
         )
+
+# ✅ ตารางสรุปสถานะ — เพื่อยืนยันความถูกต้อง
+with st.expander("📊 ดูรายละเอียดสถานะทั้งหมด"):
+    e1, e2 = st.columns(2)
+    with e1:
+        if STATUS_COL:
+            st.markdown(f"**สถานะอนุมัติ** (`{STATUS_COL}`):")
+            sc = dff[STATUS_COL].value_counts().reset_index()
+            sc.columns = ["สถานะ", "จำนวน"]
+            st.dataframe(sc, use_container_width=True, hide_index=True)
+    with e2:
+        if RETURN_COL:
+            st.markdown(f"**สถานะการคืน** (`{RETURN_COL}`):")
+            rc = dff[RETURN_COL].value_counts().reset_index()
+            rc.columns = ["สถานะ", "จำนวน"]
+            st.dataframe(rc, use_container_width=True, hide_index=True)
 
 st.markdown("---")
 
@@ -447,10 +509,13 @@ def ai_insight(dff, total, overdue):
     # วันยอดนิยม
     if "_dow" in dff.columns:
         dm = {
-            "Monday": "จันทร์",   "Tuesday":  "อังคาร",
-            "Wednesday": "พุธ",   "Thursday": "พฤหัสบดี",
-            "Friday": "ศุกร์",    "Saturday": "เสาร์",
-            "Sunday": "อาทิตย์"
+            "Monday":    "จันทร์",
+            "Tuesday":   "อังคาร",
+            "Wednesday": "พุธ",
+            "Thursday":  "พฤหัสบดี",
+            "Friday":    "ศุกร์",
+            "Saturday":  "เสาร์",
+            "Sunday":    "อาทิตย์",
         }
         vc = dff["_dow"].value_counts()
         if not vc.empty:
@@ -461,7 +526,11 @@ def ai_insight(dff, total, overdue):
 
     # อัตราการคืน
     if RETURN_COL and RETURN_COL in dff.columns:
-        r    = int((dff[RETURN_COL] == "คืนเรียบร้อย").sum())
+        r = count_status(
+            dff[RETURN_COL],
+            keywords=["คืน"],
+            exclude=["ยังไม่", "ไม่ได้"]
+        )
         rate = r / total * 100
         if rate < 50:
             wrn.append(
@@ -471,6 +540,19 @@ def ai_insight(dff, total, overdue):
         else:
             ins.append(
                 f"✅ อัตราการคืน **{rate:.1f}%** — อยู่ในเกณฑ์ดี"
+            )
+
+    # รออนุมัติ
+    if STATUS_COL and USERTYPE_COL in dff.columns:
+        p = total - count_status(
+            dff[STATUS_COL],
+            keywords=["อนุมัติ"],
+            exclude=["ไม่อนุมัติ", "รออนุมัติ", "ยังไม่"]
+        )
+        if p > 0:
+            wrn.append(
+                f"📋 มีคำขอรออนุมัติ **{p} รายการ** "
+                f"— กรุณาดำเนินการ"
             )
 
     # เกินกำหนด
@@ -509,58 +591,43 @@ with col_b:
 st.markdown("---")
 
 # ============================================================
-# MONTHLY TREND — ✅ แก้การเรียงลำดับแกน X
+# MONTHLY TREND — ✅ เรียงลำดับแกน X ถูกต้อง
 # ============================================================
 st.subheader("📈 แนวโน้มการขอใช้บริการรายเดือน")
 
 if "_month_dt" in dff.columns and dff["_month_dt"].notna().any():
 
     if USERTYPE_COL and USERTYPE_COL in dff.columns:
-        # ✅ Step 1: groupby แล้ว sort_values ด้วย _month_dt (datetime) ก่อน
         mdf = (
             dff.groupby(["_month_dt", USERTYPE_COL])
                .size()
                .reset_index(name="จำนวน")
-               .sort_values("_month_dt")          # เรียงตาม datetime
+               .sort_values("_month_dt")
         )
-        # ✅ Step 2: แปลงเป็น string หลังเรียงแล้ว
         mdf["เดือน"] = mdf["_month_dt"].dt.strftime("%b %Y")
-
-        # ✅ Step 3: สร้าง month_order จากลำดับที่ถูกต้อง
         month_order = (
             mdf[["_month_dt", "เดือน"]]
             .drop_duplicates()
             .sort_values("_month_dt")["เดือน"]
             .tolist()
         )
-
         fig_trend = px.line(
-            mdf,
-            x="เดือน",
-            y="จำนวน",
-            color=USERTYPE_COL,
-            markers=True,
+            mdf, x="เดือน", y="จำนวน",
+            color=USERTYPE_COL, markers=True,
             title="แนวโน้มรายเดือน แยกตามประเภทผู้ใช้",
             color_discrete_sequence=px.colors.qualitative.Safe,
-            # ✅ Step 4: ล็อคลำดับ X-axis
             category_orders={"เดือน": month_order}
         )
-
     else:
         mdf = (
-            dff.groupby("_month_dt")
-               .size()
+            dff.groupby("_month_dt").size()
                .reset_index(name="จำนวน")
                .sort_values("_month_dt")
         )
         mdf["เดือน"] = mdf["_month_dt"].dt.strftime("%b %Y")
         month_order  = mdf["เดือน"].tolist()
-
         fig_trend = px.line(
-            mdf,
-            x="เดือน",
-            y="จำนวน",
-            markers=True,
+            mdf, x="เดือน", y="จำนวน", markers=True,
             title="แนวโน้มรายเดือน",
             color_discrete_sequence=["#667eea"],
             category_orders={"เดือน": month_order}
@@ -574,7 +641,7 @@ if "_month_dt" in dff.columns and dff["_month_dt"].notna().any():
         plot_bgcolor="rgba(0,0,0,0)",
         paper_bgcolor="rgba(0,0,0,0)",
         hovermode="x unified",
-        xaxis=dict(tickangle=-45)   # หมุน label ให้อ่านง่าย
+        xaxis=dict(tickangle=-45)
     )
     st.plotly_chart(fig_trend, use_container_width=True)
 
@@ -589,7 +656,6 @@ st.markdown("---")
 st.subheader("🏆 Top 5 ที่ถูกขอใช้บ่อยที่สุด")
 
 def make_bar(df_in, col, title, scale):
-    """สร้าง Horizontal Bar Chart"""
     if not col or col not in df_in.columns:
         return None
     top = df_in[col].value_counts().head(5).reset_index()
@@ -609,7 +675,6 @@ def make_bar(df_in, col, title, scale):
 
 
 t1, t2 = st.columns(2)
-
 with t1:
     col_use = TOOL_COL or USERTYPE_COL
     ttl     = "🔬 Top 5 เครื่องมือ" if TOOL_COL else "Top 5 ประเภทผู้ใช้"
@@ -636,7 +701,6 @@ st.markdown("---")
 st.subheader("🎯 สัดส่วนข้อมูลสำคัญ")
 
 def make_pie(df_in, col, title, colors):
-    """สร้าง Donut Pie Chart"""
     if not col or col not in df_in.columns:
         return None
     fig = px.pie(
@@ -700,7 +764,6 @@ if "_dow" in dff.columns and "_hour" in dff.columns:
            .fillna(0)
     )
     pivot.index = day_th
-
     fig = px.imshow(
         pivot,
         labels=dict(x="ชั่วโมง", y="วัน", color="จำนวน"),
@@ -724,10 +787,12 @@ st.markdown("---")
 st.subheader("🚨 รายการที่เกินกำหนดคืน")
 
 if DATE_END_COL and RETURN_COL:
-    od = dff[
-        (dff[DATE_END_COL] < NOW) &
-        (dff[RETURN_COL]  != "คืนเรียบร้อย")
-    ].copy()
+    not_ret = ~dff[RETURN_COL].str.contains(
+        "คืน", na=False, case=False
+    ) | dff[RETURN_COL].str.contains(
+        "ยังไม่|ไม่ได้", na=False, case=False
+    )
+    od = dff[(dff[DATE_END_COL] < NOW) & not_ret].copy()
 
     if not od.empty:
         od["เกินกำหนด (วัน)"] = (NOW - od[DATE_END_COL]).dt.days
