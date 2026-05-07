@@ -47,7 +47,6 @@ SHEET_URL = (
 # HELPER FUNCTIONS
 # ============================================================
 def find_col(columns: list, keywords: list):
-    """คืน str ชื่อคอลัมน์แรกที่มี keyword — คืน None ถ้าไม่พบ"""
     for col in columns:
         for kw in keywords:
             if kw in col:
@@ -56,7 +55,6 @@ def find_col(columns: list, keywords: list):
 
 
 def parse_date_range(raw):
-    """แปลง st.date_input output → (pd.Timestamp, pd.Timestamp)"""
     try:
         if isinstance(raw, (list, tuple)):
             if len(raw) >= 2:
@@ -77,7 +75,6 @@ def parse_date_range(raw):
 
 def count_status(series: pd.Series, keywords: list,
                  exclude: list = None) -> int:
-    """นับแถวที่มี keyword และไม่มี exclude keyword"""
     if series is None or len(series) == 0:
         return 0
     mask = series.str.contains(
@@ -90,6 +87,15 @@ def count_status(series: pd.Series, keywords: list,
     return int(mask.sum())
 
 
+def safe_plotly(fig, container=None):
+    """✅ แสดง plotly chart อย่างปลอดภัย"""
+    target = container if container else st
+    if fig is not None:
+        target.plotly_chart(fig, use_container_width=True)
+    else:
+        target.info("ℹ️ ไม่พบข้อมูลสำหรับแสดงกราฟ")
+
+
 # ============================================================
 # LOAD DATA
 # ============================================================
@@ -100,7 +106,6 @@ def load_data():
     except Exception as e:
         return pd.DataFrame(), str(e)
 
-    # Timestamp
     if "Timestamp" in df.columns:
         df["Timestamp"] = pd.to_datetime(
             df["Timestamp"], errors="coerce"
@@ -146,7 +151,6 @@ def load_data():
         if "email" in cl or "e-mail" in cl or "อีเมล" in c:
             df[c] = df[c].apply(mask_email)
 
-    # คอลัมน์ช่วยคำนวณ
     if "Timestamp" in df.columns:
         df["_month_dt"] = (
             df["Timestamp"].dt.to_period("M").dt.to_timestamp()
@@ -200,21 +204,25 @@ if DATE_END_COL:
     df[DATE_END_COL]   = pd.to_datetime(df[DATE_END_COL],   errors="coerce")
 
 for c in [USERTYPE_COL, DEPT_COL, TOOL_COL, LOCATION_COL]:
-    if c: df[c] = df[c].fillna("ไม่ระบุ")
-if STATUS_COL: df[STATUS_COL] = df[STATUS_COL].fillna("ยังไม่ระบุสถานะ")
-if RETURN_COL: df[RETURN_COL] = df[RETURN_COL].fillna("ยังไม่ระบุข้อมูล")
+    if c:
+        df[c] = df[c].fillna("ไม่ระบุ")
+if STATUS_COL:
+    df[STATUS_COL] = df[STATUS_COL].fillna("ยังไม่ระบุสถานะ")
+if RETURN_COL:
+    df[RETURN_COL] = df[RETURN_COL].fillna("ยังไม่ระบุข้อมูล")
 
 # ============================================================
 # DEBUG
 # ============================================================
-with st.expander("🔍 Debug: คอลัมน์ที่ตรวจพบ (คลิกเพื่อดู)"):
+with st.expander("🔍 Debug: คอลัมน์ที่ตรวจพบ"):
     st.json({
         "STATUS_COL": STATUS_COL, "RETURN_COL": RETURN_COL,
         "USERTYPE_COL": USERTYPE_COL, "DEPT_COL": DEPT_COL,
         "TOOL_COL": TOOL_COL, "LOCATION_COL": LOCATION_COL,
         "PURPOSE_COL": PURPOSE_COL, "NAME_COL": NAME_COL,
         "PHONE_COL": PHONE_COL, "EMAIL_COL": EMAIL_COL,
-        "DATE_START_COL": DATE_START_COL, "DATE_END_COL": DATE_END_COL,
+        "DATE_START_COL": DATE_START_COL,
+        "DATE_END_COL": DATE_END_COL,
         "ALL_COLUMNS": all_cols,
     })
     d1, d2 = st.columns(2)
@@ -239,22 +247,30 @@ with st.sidebar:
 
     sel_type = "ทั้งหมด"
     if USERTYPE_COL:
-        opts = ["ทั้งหมด"] + sorted(df[USERTYPE_COL].dropna().unique().tolist())
+        opts = ["ทั้งหมด"] + sorted(
+            df[USERTYPE_COL].dropna().unique().tolist()
+        )
         sel_type = st.selectbox("👤 ประเภทผู้ใช้", opts)
 
     sel_dept = "ทั้งหมด"
     if DEPT_COL:
-        opts = ["ทั้งหมด"] + sorted(df[DEPT_COL].dropna().unique().tolist())
+        opts = ["ทั้งหมด"] + sorted(
+            df[DEPT_COL].dropna().unique().tolist()
+        )
         sel_dept = st.selectbox("🏫 คณะ/หน่วยงาน", opts)
 
     sel_status = "ทั้งหมด"
     if STATUS_COL:
-        opts = ["ทั้งหมด"] + sorted(df[STATUS_COL].dropna().unique().tolist())
+        opts = ["ทั้งหมด"] + sorted(
+            df[STATUS_COL].dropna().unique().tolist()
+        )
         sel_status = st.selectbox("📋 สถานะอนุมัติ", opts)
 
     sel_return = "ทั้งหมด"
     if RETURN_COL:
-        opts = ["ทั้งหมด"] + sorted(df[RETURN_COL].dropna().unique().tolist())
+        opts = ["ทั้งหมด"] + sorted(
+            df[RETURN_COL].dropna().unique().tolist()
+        )
         sel_return = st.selectbox("📦 สถานะคืน", opts)
 
     st.markdown("---")
@@ -275,7 +291,9 @@ with st.sidebar:
     if st.button("🔄 รีเฟรช"):
         st.cache_data.clear()
         st.rerun()
-    st.caption(f"อัปเดต: {pd.Timestamp.now().strftime('%d/%m/%Y %H:%M')}")
+    st.caption(
+        f"อัปเดต: {pd.Timestamp.now().strftime('%d/%m/%Y %H:%M')}"
+    )
 
 # ============================================================
 # FILTER
@@ -289,7 +307,8 @@ if sel_status != "ทั้งหมด" and STATUS_COL:
     dff = dff[dff[STATUS_COL]   == sel_status]
 if sel_return != "ทั้งหมด" and RETURN_COL:
     dff = dff[dff[RETURN_COL]   == sel_return]
-if date_start_filter and date_end_filter and "Timestamp" in dff.columns:
+if (date_start_filter is not None and date_end_filter is not None
+        and "Timestamp" in dff.columns):
     dff = dff[
         (dff["Timestamp"] >= date_start_filter) &
         (dff["Timestamp"] <  date_end_filter)
@@ -345,7 +364,9 @@ overdue = 0
 if DATE_END_COL and RETURN_COL:
     not_ret = (
         ~dff[RETURN_COL].str.contains("คืน", na=False, case=False)
-        | dff[RETURN_COL].str.contains("ยังไม่|ไม่ได้", na=False, case=False)
+        | dff[RETURN_COL].str.contains(
+            "ยังไม่|ไม่ได้", na=False, case=False
+        )
     )
     overdue = int(((dff[DATE_END_COL] < NOW) & not_ret).sum())
 
@@ -397,9 +418,10 @@ def ai_insight(dff, total, overdue):
         m = (dff.groupby("_month_dt").size()
                .reset_index(name="n").sort_values("_month_dt"))
         if len(m) >= 2:
-            last,prev = int(m.iloc[-1]["n"]),int(m.iloc[-2]["n"])
-            mn  = m.iloc[-1]["_month_dt"].strftime("%b %Y")
-            pct = (last-prev)/prev*100 if prev else 0
+            last = int(m.iloc[-1]["n"])
+            prev = int(m.iloc[-2]["n"])
+            mn   = m.iloc[-1]["_month_dt"].strftime("%b %Y")
+            pct  = (last-prev)/prev*100 if prev else 0
             ins.append(
                 f"{'📈' if pct>=0 else '📉'} เดือน {mn}: **{last} รายการ** "
                 f"({'เพิ่มขึ้น' if pct>=0 else 'ลดลง'} {abs(pct):.1f}%)"
@@ -416,7 +438,9 @@ def ai_insight(dff, total, overdue):
     if DEPT_COL and DEPT_COL in dff.columns:
         vc = dff[DEPT_COL].value_counts()
         if not vc.empty:
-            ins.append(f"🏫 คณะมากสุด: **{vc.idxmax()}** ({vc.max()} รายการ)")
+            ins.append(
+                f"🏫 คณะมากสุด: **{vc.idxmax()}** ({vc.max()} รายการ)"
+            )
 
     if "_hour" in dff.columns:
         vc = dff["_hour"].value_counts()
@@ -430,13 +454,17 @@ def ai_insight(dff, total, overdue):
               "Saturday":"เสาร์","Sunday":"อาทิตย์"}
         vc = dff["_dow"].value_counts()
         if not vc.empty:
-            ins.append(f"📅 วันมากสุด: **วัน{dm.get(vc.idxmax(),vc.idxmax())}**")
+            ins.append(
+                f"📅 วันมากสุด: **วัน{dm.get(vc.idxmax(),vc.idxmax())}**"
+            )
 
     if RETURN_COL and RETURN_COL in dff.columns:
         r    = count_status(dff[RETURN_COL],["คืน"],exclude=["ยังไม่","ไม่ได้"])
         rate = r/total*100
         if rate < 50:
-            wrn.append(f"⚠️ อัตราคืน **{rate:.1f}%** — ค้างอยู่ {total-r} รายการ")
+            wrn.append(
+                f"⚠️ อัตราคืน **{rate:.1f}%** — ค้างอยู่ {total-r} รายการ"
+            )
         else:
             ins.append(f"✅ อัตราการคืน **{rate:.1f}%** — อยู่ในเกณฑ์ดี")
 
@@ -455,16 +483,24 @@ def ai_insight(dff, total, overdue):
 
 
 ins_list, wrn_list = ai_insight(dff, total, overdue)
-ca, cb = st.columns([3,2])
+ca, cb = st.columns([3, 2])
+
 with ca:
-    st.markdown("<div class='ai-box'><b>🤖 AI Analysis</b></div>",
-                unsafe_allow_html=True)
-    for i in ins_list: st.success(i)
+    st.markdown(
+        "<div class='ai-box'><b>🤖 AI Analysis</b></div>",
+        unsafe_allow_html=True
+    )
+    for i in ins_list:
+        st.success(i)
+
 with cb:
-    st.markdown("<div class='alert-box'><b>🚨 AI Alert</b></div>",
-                unsafe_allow_html=True)
+    st.markdown(
+        "<div class='alert-box'><b>🚨 AI Alert</b></div>",
+        unsafe_allow_html=True
+    )
     if wrn_list:
-        for w in wrn_list: st.error(w)
+        for w in wrn_list:
+            st.error(w)
     else:
         st.info("✅ ไม่มีรายการแจ้งเตือน")
 
@@ -477,31 +513,41 @@ st.subheader("📈 แนวโน้มการขอใช้บริกา�
 
 if "_month_dt" in dff.columns and dff["_month_dt"].notna().any():
     if USERTYPE_COL and USERTYPE_COL in dff.columns:
-        mdf = (dff.groupby(["_month_dt",USERTYPE_COL]).size()
-                  .reset_index(name="จำนวน").sort_values("_month_dt"))
+        mdf = (
+            dff.groupby(["_month_dt", USERTYPE_COL])
+               .size().reset_index(name="จำนวน")
+               .sort_values("_month_dt")
+        )
         mdf["เดือน"] = mdf["_month_dt"].dt.strftime("%b %Y")
         mo = (mdf[["_month_dt","เดือน"]].drop_duplicates()
                 .sort_values("_month_dt")["เดือน"].tolist())
-        fig_t = px.line(mdf,x="เดือน",y="จำนวน",color=USERTYPE_COL,
-                        markers=True,
-                        title="แนวโน้มรายเดือน แยกประเภทผู้ใช้",
-                        color_discrete_sequence=px.colors.qualitative.Safe,
-                        category_orders={"เดือน":mo})
+        fig_t = px.line(
+            mdf, x="เดือน", y="จำนวน", color=USERTYPE_COL,
+            markers=True,
+            title="แนวโน้มรายเดือน แยกประเภทผู้ใช้",
+            color_discrete_sequence=px.colors.qualitative.Safe,
+            category_orders={"เดือน": mo}
+        )
     else:
-        mdf = (dff.groupby("_month_dt").size()
-                  .reset_index(name="จำนวน").sort_values("_month_dt"))
+        mdf = (
+            dff.groupby("_month_dt").size()
+               .reset_index(name="จำนวน").sort_values("_month_dt")
+        )
         mdf["เดือน"] = mdf["_month_dt"].dt.strftime("%b %Y")
-        mo  = mdf["เดือน"].tolist()
-        fig_t = px.line(mdf,x="เดือน",y="จำนวน",markers=True,
-                        title="แนวโน้มรายเดือน",
-                        color_discrete_sequence=["#667eea"],
-                        category_orders={"เดือน":mo})
-        fig_t.update_traces(fill="tozeroy",
-                            fillcolor="rgba(102,126,234,0.15)")
-    fig_t.update_layout(plot_bgcolor="rgba(0,0,0,0)",
-                        paper_bgcolor="rgba(0,0,0,0)",
-                        hovermode="x unified",
-                        xaxis=dict(tickangle=-45))
+        mo = mdf["เดือน"].tolist()
+        fig_t = px.line(
+            mdf, x="เดือน", y="จำนวน", markers=True,
+            title="แนวโน้มรายเดือน",
+            color_discrete_sequence=["#667eea"],
+            category_orders={"เดือน": mo}
+        )
+        fig_t.update_traces(
+            fill="tozeroy", fillcolor="rgba(102,126,234,0.15)"
+        )
+    fig_t.update_layout(
+        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+        hovermode="x unified", xaxis=dict(tickangle=-45)
+    )
     st.plotly_chart(fig_t, use_container_width=True)
 else:
     st.info("ℹ️ ไม่พบข้อมูลเวลา")
@@ -514,29 +560,45 @@ st.markdown("---")
 st.subheader("🏆 Top 5")
 
 def make_bar(df_in, col, title, scale):
-    if not col or col not in df_in.columns: return None
+    """✅ คืน fig หรือ None — ไม่ใช้ ternary"""
+    if not col or col not in df_in.columns:
+        return None
     top = df_in[col].value_counts().head(5).reset_index()
-    top.columns = [col,"จำนวน"]
-    fig = px.bar(top,x="จำนวน",y=col,orientation="h",title=title,
-                 color="จำนวน",color_continuous_scale=scale,text="จำนวน")
+    top.columns = [col, "จำนวน"]
+    fig = px.bar(
+        top, x="จำนวน", y=col, orientation="h",
+        title=title, color="จำนวน",
+        color_continuous_scale=scale, text="จำนวน"
+    )
     fig.update_traces(textposition="outside")
-    fig.update_layout(plot_bgcolor="rgba(0,0,0,0)",
-                      yaxis=dict(autorange="reversed"),
-                      coloraxis_showscale=False)
+    fig.update_layout(
+        plot_bgcolor="rgba(0,0,0,0)",
+        yaxis=dict(autorange="reversed"),
+        coloraxis_showscale=False
+    )
     return fig
 
-t1,t2 = st.columns(2)
+
+t1, t2 = st.columns(2)
+
 with t1:
-    f = make_bar(dff, TOOL_COL or USERTYPE_COL,
-                 "🔬 Top 5 เครื่องมือ" if TOOL_COL else "Top 5 ประเภทผู้ใช้",
-                 "Viridis")
-    st.plotly_chart(f, use_container_width=True) if f else st.info("ℹ️ ไม่พบข้อมูล")
+    col_use = TOOL_COL if TOOL_COL else USERTYPE_COL
+    ttl     = "🔬 Top 5 เครื่องมือ" if TOOL_COL else "Top 5 ประเภทผู้ใช้"
+    fig     = make_bar(dff, col_use, ttl, "Viridis")
+    # ✅ if/else block ไม่ใช้ ternary
+    if fig is not None:
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("ℹ️ ไม่พบข้อมูลเครื่องมือ")
 
 with t2:
-    f = make_bar(dff, LOCATION_COL or DEPT_COL,
-                 "🏠 Top 5 สถานที่" if LOCATION_COL else "Top 5 คณะ/หน่วยงาน",
-                 "Oranges")
-    st.plotly_chart(f, use_container_width=True) if f else st.info("ℹ️ ไม่พบข้อมูล")
+    col_use = LOCATION_COL if LOCATION_COL else DEPT_COL
+    ttl     = "🏠 Top 5 สถานที่" if LOCATION_COL else "Top 5 คณะ/หน่วยงาน"
+    fig     = make_bar(dff, col_use, ttl, "Oranges")
+    if fig is not None:
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("ℹ️ ไม่พบข้อมูลสถานที่")
 
 st.markdown("---")
 
@@ -546,31 +608,41 @@ st.markdown("---")
 st.subheader("🎯 สัดส่วนข้อมูลสำคัญ")
 
 def make_pie(df_in, col, title, colors):
-    if not col or col not in df_in.columns: return None
-    fig = px.pie(df_in,names=col,title=title,hole=0.4,
-                 color_discrete_sequence=colors)
-    fig.update_traces(textposition="inside",textinfo="percent+label")
+    if not col or col not in df_in.columns:
+        return None
+    fig = px.pie(
+        df_in, names=col, title=title, hole=0.4,
+        color_discrete_sequence=colors
+    )
+    fig.update_traces(textposition="inside", textinfo="percent+label")
     return fig
 
-p1,p2 = st.columns(2)
-with p1:
-    f = make_pie(dff,USERTYPE_COL,"ประเภทผู้ใช้",
-                 px.colors.qualitative.Safe)
-    if f: st.plotly_chart(f,use_container_width=True)
-with p2:
-    f = make_pie(dff,DEPT_COL,"คณะ/หน่วยงาน",
-                 px.colors.qualitative.Pastel)
-    if f: st.plotly_chart(f,use_container_width=True)
 
-p3,p4 = st.columns(2)
+p1, p2 = st.columns(2)
+with p1:
+    fig = make_pie(dff, USERTYPE_COL, "ประเภทผู้ใช้",
+                   px.colors.qualitative.Safe)
+    if fig is not None:
+        st.plotly_chart(fig, use_container_width=True)
+
+with p2:
+    fig = make_pie(dff, DEPT_COL, "คณะ/หน่วยงาน",
+                   px.colors.qualitative.Pastel)
+    if fig is not None:
+        st.plotly_chart(fig, use_container_width=True)
+
+p3, p4 = st.columns(2)
 with p3:
-    f = make_pie(dff,STATUS_COL,"สถานะการอนุมัติ",
-                 ["#FFCC00","#2ecc71","#e74c3c","#95a5a6"])
-    if f: st.plotly_chart(f,use_container_width=True)
+    fig = make_pie(dff, STATUS_COL, "สถานะการอนุมัติ",
+                   ["#FFCC00","#2ecc71","#e74c3c","#95a5a6"])
+    if fig is not None:
+        st.plotly_chart(fig, use_container_width=True)
+
 with p4:
-    f = make_pie(dff,RETURN_COL,"สถานะการคืน",
-                 ["#3498db","#95a5a6","#e67e22"])
-    if f: st.plotly_chart(f,use_container_width=True)
+    fig = make_pie(dff, RETURN_COL, "สถานะการคืน",
+                   ["#3498db","#95a5a6","#e67e22"])
+    if fig is not None:
+        st.plotly_chart(fig, use_container_width=True)
 
 st.markdown("---")
 
@@ -584,40 +656,48 @@ if "_dow" in dff.columns and "_hour" in dff.columns:
                  "Thursday","Friday","Saturday","Sunday"]
     day_th    = ["จันทร์","อังคาร","พุธ",
                  "พฤหัส","ศุกร์","เสาร์","อาทิตย์"]
-    hdf = (dff.groupby(["_dow","_hour"]).size()
-              .reset_index(name="count"))
-    pivot = (hdf.pivot(index="_dow",columns="_hour",values="count")
-                .reindex(day_order).fillna(0))
+    hdf = (
+        dff.groupby(["_dow","_hour"]).size().reset_index(name="count")
+    )
+    pivot = (
+        hdf.pivot(index="_dow", columns="_hour", values="count")
+           .reindex(day_order).fillna(0)
+    )
     pivot.index = day_th
-    fig = px.imshow(pivot,
-                    labels=dict(x="ชั่วโมง",y="วัน",color="จำนวน"),
-                    title="จำนวนคำขอตามวันและเวลา",
-                    color_continuous_scale="YlOrRd",aspect="auto")
-    fig.update_layout(plot_bgcolor="rgba(0,0,0,0)",
-                      paper_bgcolor="rgba(0,0,0,0)")
-    st.plotly_chart(fig,use_container_width=True)
+    fig = px.imshow(
+        pivot,
+        labels=dict(x="ชั่วโมง", y="วัน", color="จำนวน"),
+        title="จำนวนคำขอตามวันและเวลา",
+        color_continuous_scale="YlOrRd", aspect="auto"
+    )
+    fig.update_layout(
+        plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)"
+    )
+    st.plotly_chart(fig, use_container_width=True)
 else:
     st.info("ℹ️ ไม่พบข้อมูลเวลาสำหรับ Heatmap")
 
 st.markdown("---")
 
 # ============================================================
-# OVERDUE TABLE + ประวัติรายคน ✅ ฟีเจอร์ใหม่
+# OVERDUE + ประวัติรายคน
 # ============================================================
 st.subheader("🚨 รายการที่เกินกำหนดคืน")
 
 if DATE_END_COL and RETURN_COL:
     not_ret_mask = (
         ~dff[RETURN_COL].str.contains("คืน", na=False, case=False)
-        | dff[RETURN_COL].str.contains("ยังไม่|ไม่ได้", na=False, case=False)
+        | dff[RETURN_COL].str.contains(
+            "ยังไม่|ไม่ได้", na=False, case=False
+        )
     )
-    # แถวที่ยังไม่คืนและเกินกำหนด
-    od = dff[(dff[DATE_END_COL] < NOW) & not_ret_mask].copy()
-    # แถวที่เคยเกินกำหนด (ทุกสถานะ)
+    od      = dff[(dff[DATE_END_COL] < NOW) & not_ret_mask].copy()
     ever_od = dff[dff[DATE_END_COL] < NOW].copy()
 
     if not ever_od.empty:
-        ever_od["เกินกำหนด (วัน)"] = (NOW - ever_od[DATE_END_COL]).dt.days
+        ever_od["เกินกำหนด (วัน)"] = (
+            NOW - ever_od[DATE_END_COL]
+        ).dt.days
 
     tab1, tab2, tab3 = st.tabs([
         "🚨 ยังไม่คืน",
@@ -625,7 +705,7 @@ if DATE_END_COL and RETURN_COL:
         "📈 กราฟความถี่"
     ])
 
-    # ---- TAB 1: ยังไม่คืน ----
+    # ---- TAB 1 ----
     with tab1:
         if not od.empty:
             od["เกินกำหนด (วัน)"] = (NOW - od[DATE_END_COL]).dt.days
@@ -636,30 +716,29 @@ if DATE_END_COL and RETURN_COL:
             ] if c and c in od.columns]
             st.error(f"⚠️ พบ {len(od)} รายการที่ยังไม่คืนและเกินกำหนด")
             st.dataframe(
-                od[show_od].sort_values("เกินกำหนด (วัน)", ascending=False),
+                od[show_od].sort_values(
+                    "เกินกำหนด (วัน)", ascending=False
+                ),
                 use_container_width=True, hide_index=True
             )
         else:
             st.success("✅ ไม่มีรายการค้างคืน")
 
-    # ---- TAB 2: ประวัติรายคน ----
+    # ---- TAB 2 ----
     with tab2:
         if NAME_COL and not ever_od.empty:
-            st.markdown("**สรุปจำนวนครั้งที่เคยเกินกำหนดต่อคน**")
-
             summary = (
                 ever_od.groupby(NAME_COL)
                 .agg(
-                    จำนวนครั้ง   =("เกินกำหนด (วัน)", "count"),
-                    เฉลี่ย_วัน   =("เกินกำหนด (วัน)", "mean"),
-                    สูงสุด_วัน   =("เกินกำหนด (วัน)", "max"),
+                    จำนวนครั้ง=("เกินกำหนด (วัน)", "count"),
+                    เฉลี่ย_วัน=("เกินกำหนด (วัน)", "mean"),
+                    สูงสุด_วัน=("เกินกำหนด (วัน)", "max"),
                 )
                 .reset_index()
                 .sort_values("จำนวนครั้ง", ascending=False)
             )
             summary["เฉลี่ย_วัน"] = summary["เฉลี่ย_วัน"].round(1)
 
-            # เพิ่ม dept/phone
             if DEPT_COL:
                 dm = dff.groupby(NAME_COL)[DEPT_COL].first().reset_index()
                 summary = summary.merge(dm, on=NAME_COL, how="left")
@@ -667,7 +746,6 @@ if DATE_END_COL and RETURN_COL:
                 pm = dff.groupby(NAME_COL)[PHONE_COL].first().reset_index()
                 summary = summary.merge(pm, on=NAME_COL, how="left")
 
-            # แสดงผล
             st.dataframe(
                 summary,
                 use_container_width=True,
@@ -684,131 +762,11 @@ if DATE_END_COL and RETURN_COL:
                     ),
                 }
             )
-
             st.download_button(
                 "⬇️ ดาวน์โหลดประวัติ (CSV)",
                 data=summary.to_csv(index=False).encode("utf-8-sig"),
-                file_name=f"overdue_history_{NOW.strftime('%Y%m%d')}.csv",
+                file_name=f"overdue_{NOW.strftime('%Y%m%d')}.csv",
                 mime="text/csv"
             )
         else:
-            st.info("ℹ️ ต้องมีคอลัมน์ชื่อ-สกุล")
-
-    # ---- TAB 3: กราฟ ----
-    with tab3:
-        if NAME_COL and not ever_od.empty:
-            g1, g2 = st.columns(2)
-
-            with g1:
-                top10 = summary.head(10)
-                fig_f = px.bar(
-                    top10, x="จำนวนครั้ง", y=NAME_COL,
-                    orientation="h",
-                    title="🏆 Top 10 ผู้เกินกำหนดบ่อยสุด",
-                    color="จำนวนครั้ง",
-                    color_continuous_scale="Reds",
-                    text="จำนวนครั้ง"
-                )
-                fig_f.update_traces(textposition="outside")
-                fig_f.update_layout(
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    yaxis=dict(autorange="reversed"),
-                    coloraxis_showscale=False
-                )
-                st.plotly_chart(fig_f, use_container_width=True)
-
-            with g2:
-                fig_h = px.histogram(
-                    ever_od, x="เกินกำหนด (วัน)", nbins=20,
-                    title="📊 การกระจายวันที่เกินกำหนด",
-                    color_discrete_sequence=["#f5576c"]
-                )
-                fig_h.update_layout(
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    paper_bgcolor="rgba(0,0,0,0)"
-                )
-                st.plotly_chart(fig_h, use_container_width=True)
-
-            # แนวโน้มรายเดือน
-            if "_month_dt" in ever_od.columns:
-                mod = (ever_od.groupby("_month_dt").size()
-                              .reset_index(name="จำนวน")
-                              .sort_values("_month_dt"))
-                mod["เดือน"] = mod["_month_dt"].dt.strftime("%b %Y")
-                mo = mod["เดือน"].tolist()
-                fig_ot = px.line(
-                    mod, x="เดือน", y="จำนวน", markers=True,
-                    title="📈 แนวโน้มการเกินกำหนดรายเดือน",
-                    color_discrete_sequence=["#f5576c"],
-                    category_orders={"เดือน": mo}
-                )
-                fig_ot.update_traces(
-                    fill="tozeroy",
-                    fillcolor="rgba(245,87,108,0.15)"
-                )
-                fig_ot.update_layout(
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    xaxis=dict(tickangle=-45)
-                )
-                st.plotly_chart(fig_ot, use_container_width=True)
-        else:
-            st.info("ℹ️ ไม่มีข้อมูลเกินกำหนด")
-
-else:
-    st.warning(
-        "⚠️ ไม่พบคอลัมน์วันที่สิ้นสุดการยืม\n\n"
-        "เปิด Debug ด้านบน → ดู ALL_COLUMNS "
-        "→ แจ้งชื่อคอลัมน์วันที่เพื่อเพิ่ม keyword"
-    )
-
-st.markdown("---")
-
-# ============================================================
-# DATA TABLE + SEARCH + EXPORT
-# ============================================================
-st.subheader("📋 รายละเอียดผู้ขอใช้บริการทั้งหมด")
-
-search = st.text_input(
-    "🔍 ค้นหา", placeholder="ชื่อ, คณะ, สถานะ..."
-)
-
-show_cols = [c for c in [
-    "Timestamp", NAME_COL, USERTYPE_COL, DEPT_COL,
-    PURPOSE_COL, PHONE_COL, EMAIL_COL, STATUS_COL, RETURN_COL,
-] if c and c in dff.columns]
-
-disp = dff[show_cols].copy()
-if "Timestamp" in disp.columns:
-    disp = disp.sort_values("Timestamp", ascending=True)
-    disp["Timestamp"] = disp["Timestamp"].dt.strftime("%d/%m/%Y %H:%M")
-
-if search.strip():
-    mask = disp.apply(
-        lambda r: r.astype(str).str.contains(
-            search.strip(), case=False
-        ).any(), axis=1
-    )
-    disp = disp[mask]
-    st.caption(f"🔍 พบ {len(disp)} รายการ")
-
-st.dataframe(disp, use_container_width=True, hide_index=True)
-st.download_button(
-    "⬇️ ดาวน์โหลด CSV",
-    data=disp.to_csv(index=False).encode("utf-8-sig"),
-    file_name=f"report_{NOW.strftime('%Y%m%d_%H%M')}.csv",
-    mime="text/csv"
-)
-
-st.markdown("---")
-
-# ============================================================
-# FOOTER
-# ============================================================
-st.markdown(
-    f"<div style='text-align:center;color:#999;font-size:.8rem;padding:10px;'>"
-    f"🧪 Science Equipment Dashboard — AI Enhanced<br>"
-    f"อัปเดตทุก 60 วินาที | {NOW.strftime('%d/%m/%Y %H:%M')} น. | "
-    f"🔒 PDPA Protected</div>",
-    unsafe_allow_html=True
-)
+            st.info("ℹ️ ไม่มีข้อมูลหรือไม่พบคอลัมน์ช
